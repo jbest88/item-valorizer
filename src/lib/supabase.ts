@@ -1,19 +1,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl) {
-  throw new Error(
-    'Please define VITE_SUPABASE_URL in your Supabase project settings'
-  );
-}
-
-if (!supabaseAnonKey) {
-  throw new Error(
-    'Please define VITE_SUPABASE_ANON_KEY in your Supabase project settings'
-  );
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Initialize Supabase client with project values
+export const supabase = createClient(
+  'https://dhsmmzgkbjedmfhrvsdw.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoc21temdrYmplZG1maHJ2c2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAyMzY3MzEsImV4cCI6MjA1NTgxMjczMX0.BADNdzTgicsIVfftq5wS_a360HsyK8gI36GWf7aKPok'
+);
