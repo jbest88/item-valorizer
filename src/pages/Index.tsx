@@ -20,11 +20,13 @@ const Index = () => {
       const filePath = `uploads/${fileName}`;
 
       // Upload image to Supabase Storage
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError, data } = await supabase.storage
         .from('item-images')
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        throw uploadError;
+      }
 
       // Get public URL for the uploaded image
       const { data: { publicUrl } } = supabase.storage
@@ -52,10 +54,13 @@ const Index = () => {
             item_name: analysisResult.itemName,
             confidence: analysisResult.confidence,
             prices: analysisResult.prices,
+            status: 'completed'
           }
         ]);
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        throw dbError;
+      }
 
       setResults(analysisResult);
       
