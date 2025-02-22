@@ -2,7 +2,9 @@
 import { useState } from 'react';
 import { ImageDropzone } from '@/components/ImageDropzone';
 import { ResultsCard } from '@/components/ResultsCard';
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from '@/lib/supabase';
+import { v4 as uuidv4 } from 'uuid';
 
 const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -11,17 +13,27 @@ const Index = () => {
 
   const handleImageUpload = async (file: File) => {
     setIsProcessing(true);
-    // This is a placeholder for the actual implementation
-    // In reality, you would:
-    // 1. Upload the image to Supabase storage
-    // 2. Call the Vision API to identify the item
-    // 3. Scrape pricing data
-    // 4. Update the UI with results
-    
-    // Simulate processing delay
-    setTimeout(() => {
-      setResults({
-        image: URL.createObjectURL(file),
+    try {
+      // Generate unique file name
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const filePath = `uploads/${fileName}`;
+
+      // Upload image to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('item-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL for the uploaded image
+      const { data: { publicUrl } } = supabase.storage
+        .from('item-images')
+        .getPublicUrl(filePath);
+
+      // For now, we'll use sample data until we integrate the Vision API
+      const analysisResult = {
+        image: publicUrl,
         itemName: "Sample Item",
         confidence: 0.95,
         prices: [
@@ -29,14 +41,38 @@ const Index = () => {
           { price: 89.99, source: "Kijiji", url: "#" },
           { price: 109.99, source: "Collector's DB", url: "#" },
         ],
-      });
-      setIsProcessing(false);
+      };
+
+      // Store the analysis result in the database
+      const { error: dbError } = await supabase
+        .from('item_analyses')
+        .insert([
+          {
+            image_path: filePath,
+            item_name: analysisResult.itemName,
+            confidence: analysisResult.confidence,
+            prices: analysisResult.prices,
+          }
+        ]);
+
+      if (dbError) throw dbError;
+
+      setResults(analysisResult);
       
       toast({
         title: "Analysis Complete",
         description: "Your item has been successfully analyzed",
       });
-    }, 2000);
+    } catch (error) {
+      console.error('Error processing image:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process the image. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
