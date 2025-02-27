@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
-// Helper function to convert an ArrayBuffer to a Base64-encoded string
+// Helper: convert an ArrayBuffer to a Base64-encoded string
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -13,8 +13,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -37,17 +36,16 @@ serve(async (req) => {
     }
     console.log("Processing image:", imagePath);
 
-    // Create Supabase admin client using service role key
+    // Create Supabase admin client
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    console.log("Using SUPABASE_URL:", supabaseUrl);
+    console.log("SUPABASE_URL:", supabaseUrl);
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get the public URL for the image from Supabase Storage
+    // Get public URL for the image
     const { data, error: urlError } = supabaseAdmin.storage
       .from("item-images")
       .getPublicUrl(imagePath);
-
     if (urlError) {
       console.error("Error getting public URL:", urlError);
       return new Response(
@@ -55,10 +53,8 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       );
     }
-
     const publicUrl = data?.publicUrl;
     console.log("Public URL:", publicUrl);
-
     if (!publicUrl) {
       return new Response(
         JSON.stringify({ error: "Unable to retrieve public URL for the image" }),
@@ -75,28 +71,23 @@ serve(async (req) => {
     if (!imageResponse.ok) {
       return new Response(
         JSON.stringify({ error: "Unable to fetch image data" }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 400,
-        }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
     const arrayBuffer = await imageResponse.arrayBuffer();
     const base64Image = arrayBufferToBase64(arrayBuffer);
-    console.log("Converted image to Base64, length:", base64Image.length);
+    console.log("Base64 image length:", base64Image.length);
 
-    // Retrieve the Google Vision API key from secrets
+    // Retrieve Google Vision API key
     const googleApiKey = Deno.env.get("GOOGLE_VISION_API_KEY");
     if (!googleApiKey) {
-      return new Response(
-        JSON.stringify({ error: "Missing Google API key" }),
-        { status: 500 }
-      );
+      console.error("Missing Google API key");
+      return new Response(JSON.stringify({ error: "Missing Google API key" }), { status: 500 });
     }
     const visionApiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${googleApiKey}`;
     console.log("Calling Vision API at:", visionApiUrl);
 
-    // Build the request payload for the Vision API
+    // Build the Vision API request payload
     const visionRequestBody = {
       requests: [
         {
@@ -107,28 +98,24 @@ serve(async (req) => {
     };
 
     // Call the Google Vision API
-    const visionResponse = await fetch(visionApiUrl, {
+    const visionApiResponse = await fetch(visionApiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(visionRequestBody),
     });
-    console.log("Vision API HTTP status:", visionResponse.status);
-
-    if (!visionResponse.ok) {
-      const errorText = await visionResponse.text();
+    console.log("Vision API HTTP status:", visionApiResponse.status);
+    if (!visionApiResponse.ok) {
+      const errorText = await visionApiResponse.text();
       console.error("Vision API error:", errorText);
       return new Response(
         JSON.stringify({ error: "Vision API error", details: errorText }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 500,
-        }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       );
     }
-    const visionData = await visionResponse.json();
+    const visionData = await visionApiResponse.json();
     console.log("Vision API response:", JSON.stringify(visionData));
 
-    // Process the Vision API response to extract the first label
+    // Extract the first label
     const labelAnnotations = visionData.responses?.[0]?.labelAnnotations;
     let detectedItemName = "Unknown Item";
     let detectedConfidence = 0;
@@ -137,14 +124,14 @@ serve(async (req) => {
       detectedConfidence = labelAnnotations[0].score || 0;
     }
 
-    // (Optional) Define a pricing array here or replace with your actual logic
+    // (Optional) Define a pricing array (or replace with real logic)
     const prices = [
       { price: 299.99, source: "eBay", url: "https://example.com/ebay" },
       { price: 275.0, source: "Etsy", url: "https://example.com/etsy" },
       { price: 325.0, source: "Facebook Marketplace", url: "https://example.com/facebook" },
     ];
 
-    // Build the final analysis result using the Vision API data
+    // Build final result
     const analysisResult = {
       image: publicUrl,
       itemName: detectedItemName,
@@ -152,7 +139,7 @@ serve(async (req) => {
       prices,
     };
 
-    console.log("Analysis complete. Returning Vision API data.");
+    console.log("Analysis complete. Returning data.");
     return new Response(JSON.stringify(analysisResult), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
@@ -160,10 +147,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in analyze-image function:", error);
     return new Response(
-      JSON.stringify({
-        error: "An unexpected error occurred",
-        details: error.message,
-      }),
+      JSON.stringify({ error: "An unexpected error occurred", details: error.message }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
