@@ -144,6 +144,9 @@ serve(async (req) => {
       prices: priceData,
     };
 
+    console.log("Analysis complete for:", imagePath);
+    console.log("Item identified as:", itemName);
+
     return new Response(
       JSON.stringify(analysisResult),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }

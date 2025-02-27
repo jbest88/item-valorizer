@@ -28,27 +28,19 @@ const Index = () => {
         throw uploadError;
       }
 
-      // Get public URL for the uploaded image
-      const { data: { publicUrl } } = supabase.storage
-        .from('item-images')
-        .getPublicUrl(filePath);
-
       // Call our Edge Function to analyze the image
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL || 'https://dhsmmzgkbjedmfhrvsdw.supabase.co'}/functions/v1/analyze-image`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoc21temdrYmplZG1maHJ2c2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAyMzY3MzEsImV4cCI6MjA1NTgxMjczMX0.BADNdzTgicsIVfftq5wS_a360HsyK8gI36GWf7aKPok'}`,
-        },
-        body: JSON.stringify({ imagePath: filePath }),
-      });
+      const { data: analysisResult, error: functionError } = await supabase.functions
+        .invoke('analyze-image', {
+          body: { imagePath: filePath },
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to analyze image');
+      if (functionError) {
+        throw new Error(functionError.message || 'Failed to analyze image');
       }
 
-      const analysisResult = await response.json();
+      if (!analysisResult) {
+        throw new Error('No analysis result returned');
+      }
 
       // Store the analysis result in the database
       const { error: dbError } = await supabase
