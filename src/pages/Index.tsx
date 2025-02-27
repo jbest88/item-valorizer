@@ -33,17 +33,22 @@ const Index = () => {
         .from('item-images')
         .getPublicUrl(filePath);
 
-      // For now, we'll use sample data until we integrate the Vision API
-      const analysisResult = {
-        image: publicUrl,
-        itemName: "Sample Item",
-        confidence: 0.95,
-        prices: [
-          { price: 99.99, source: "eBay", url: "#" },
-          { price: 89.99, source: "Kijiji", url: "#" },
-          { price: 109.99, source: "Collector's DB", url: "#" },
-        ],
-      };
+      // Call our Edge Function to analyze the image
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL || 'https://dhsmmzgkbjedmfhrvsdw.supabase.co'}/functions/v1/analyze-image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoc21temdrYmplZG1maHJ2c2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAyMzY3MzEsImV4cCI6MjA1NTgxMjczMX0.BADNdzTgicsIVfftq5wS_a360HsyK8gI36GWf7aKPok'}`,
+        },
+        body: JSON.stringify({ imagePath: filePath }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to analyze image');
+      }
+
+      const analysisResult = await response.json();
 
       // Store the analysis result in the database
       const { error: dbError } = await supabase

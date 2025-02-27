@@ -17,6 +17,7 @@ export type Database = {
           image_path: string
           item_name: string
           prices: Json
+          status: string | null
         }
         Insert: {
           confidence: number
@@ -25,6 +26,7 @@ export type Database = {
           image_path: string
           item_name: string
           prices: Json
+          status?: string | null
         }
         Update: {
           confidence?: number
@@ -33,6 +35,7 @@ export type Database = {
           image_path?: string
           item_name?: string
           prices?: Json
+          status?: string | null
         }
         Relationships: []
       }
