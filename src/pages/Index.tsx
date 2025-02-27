@@ -58,6 +58,16 @@ const Index = () => {
         throw new Error('No analysis result returned');
       }
 
+      // Get public URL for the uploaded image
+      const { data: { publicUrl } } = supabase.storage
+        .from('item-images')
+        .getPublicUrl(filePath);
+      
+      // If the analysis result doesn't have the image URL, add it
+      if (!analysisResult.image) {
+        analysisResult.image = publicUrl;
+      }
+
       // Store the analysis result in the database
       const { error: dbError } = await supabase
         .from('item_analyses')
