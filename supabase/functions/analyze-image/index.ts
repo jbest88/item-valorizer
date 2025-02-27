@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    // Parse request body
+    // Parse the request body
     const { imagePath } = await req.json();
     if (!imagePath) {
       return new Response(
@@ -24,13 +24,13 @@ serve(async (req) => {
 
     console.log("Processing image:", imagePath);
 
-    // Create Supabase admin client using service role key
+    // Create a Supabase admin client using your service role key
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get the public URL for the image from Supabase Storage
+    // Retrieve the public URL for the image from Supabase Storage
     const { data: { publicUrl } } = supabaseAdmin.storage
       .from("item-images")
       .getPublicUrl(imagePath);
@@ -42,7 +42,7 @@ serve(async (req) => {
       );
     }
 
-    // Fetch the image data using the public URL
+    // Fetch the image data from the public URL
     const imageResponse = await fetch(publicUrl);
     if (!imageResponse.ok) {
       return new Response(
@@ -51,10 +51,11 @@ serve(async (req) => {
       );
     }
     const arrayBuffer = await imageResponse.arrayBuffer();
+    // Convert the image data to a binary string and then encode it as Base64
     const binaryString = String.fromCharCode(...new Uint8Array(arrayBuffer));
     const base64Image = btoa(binaryString);
 
-    // Retrieve the Google Vision API key from secrets
+    // Retrieve your Google Vision API key from Edge Function secrets
     const googleApiKey = Deno.env.get("GOOGLE_VISION_API_KEY");
     if (!googleApiKey) {
       return new Response(JSON.stringify({ error: "Missing Google API key" }), { status: 500 });
@@ -96,14 +97,14 @@ serve(async (req) => {
       detectedConfidence = labelAnnotations[0].score || 0;
     }
 
-    // For demonstration, we'll include a mock pricing array.
+    // Define a mock pricing array (replace with real data as needed)
     const prices = [
       { price: 299.99, source: "eBay", url: "https://example.com/ebay" },
       { price: 275.0, source: "Etsy", url: "https://example.com/etsy" },
       { price: 325.0, source: "Facebook Marketplace", url: "https://example.com/facebook" },
     ];
 
-    // Build the final analysis result using actual Vision API data
+    // Build the final analysis result using the Vision API data
     const analysisResult = {
       image: publicUrl,
       itemName: detectedItemName,
