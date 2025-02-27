@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,137 +8,127 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight request
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Parse request body
     const { imagePath } = await req.json();
-    
+
     if (!imagePath) {
       return new Response(
-        JSON.stringify({ error: 'No image path provided' }),
+        JSON.stringify({ error: 'Image path is required' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const visionApiKey = Deno.env.get('GOOGLE_VISION_API_KEY') ?? '';
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Create Supabase client
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    );
 
-    // Get the image from Supabase Storage
-    const { data: fileData, error: fileError } = await supabase.storage
+    // Get the image from Storage
+    const { data: imageData, error: storageError } = await supabaseAdmin.storage
       .from('item-images')
       .download(imagePath);
 
-    if (fileError) {
+    if (storageError || !imageData) {
       return new Response(
-        JSON.stringify({ error: 'Failed to retrieve image', details: fileError }),
+        JSON.stringify({ error: 'Failed to download image', details: storageError }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    // Convert file to base64
-    const fileArrayBuffer = await fileData.arrayBuffer();
-    const fileBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(fileArrayBuffer))
+    // Convert image to base64
+    const buffer = await imageData.arrayBuffer();
+    const base64Image = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+
+    // Call Google Vision API to analyze the image
+    const apiKey = Deno.env.get('GOOGLE_VISION_API_KEY') ?? '';
+    
+    const visionApiResponse = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requests: [
+            {
+              image: {
+                content: base64Image,
+              },
+              features: [
+                {
+                  type: 'LABEL_DETECTION',
+                  maxResults: 5,
+                },
+                {
+                  type: 'OBJECT_LOCALIZATION',
+                  maxResults: 5,
+                },
+              ],
+            },
+          ],
+        }),
+      }
     );
 
-    // Create Google Vision API request
-    const visionApiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${visionApiKey}`;
-    const visionRequest = {
-      requests: [
-        {
-          image: {
-            content: fileBase64,
-          },
-          features: [
-            {
-              type: "LABEL_DETECTION",
-              maxResults: 5,
-            },
-            {
-              type: "WEB_DETECTION",
-              maxResults: 5,
-            }
-          ],
-        },
-      ],
-    };
+    const visionData = await visionApiResponse.json();
 
-    // Call Google Vision API
-    const visionResponse = await fetch(visionApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(visionRequest),
-    });
-
-    const visionData = await visionResponse.json();
-
-    if (!visionResponse.ok) {
+    if (!visionData || visionData.error) {
       return new Response(
-        JSON.stringify({ error: 'Vision API error', details: visionData }),
+        JSON.stringify({ error: 'Google Vision API error', details: visionData.error }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
 
-    // Process Vision API results
-    const labels = visionData.responses[0]?.labelAnnotations || [];
-    const webDetection = visionData.responses[0]?.webDetection || {};
-    
-    // Get the most likely item name from labels
-    const itemName = labels.length > 0 ? labels[0].description : "Unknown Item";
-    const confidence = labels.length > 0 ? labels[0].score : 0;
-    
-    // Get price estimates from web entities and pages
-    const priceData = [];
-    
-    // Try to extract prices from web detection
-    const webEntities = webDetection.webEntities || [];
-    const pagesWithMatchingImages = webDetection.pagesWithMatchingImages || [];
-    
-    // Simulate price scraping - in a real implementation, you would
-    // do more sophisticated scraping or use another API
-    const sources = ["eBay", "Kijiji", "Collector's DB"];
-    
-    // Generate some semi-realistic prices based on the confidence
-    // In a real implementation, you would scrape actual prices
-    const basePrice = 50 + (confidence * 100);
-    
-    for (let i = 0; i < 3 && i < pagesWithMatchingImages.length; i++) {
-      const page = pagesWithMatchingImages[i];
-      // Generate a realistic price variation
-      const priceVariation = (Math.random() * 0.4) - 0.2; // -20% to +20%
-      const price = basePrice * (1 + priceVariation);
+    // Extract item information from Vision API response
+    let itemName = "Unknown Item";
+    let confidence = 0;
+
+    // Try to get the most relevant object
+    if (visionData.responses && 
+        visionData.responses[0] && 
+        visionData.responses[0].localizedObjectAnnotations && 
+        visionData.responses[0].localizedObjectAnnotations.length > 0) {
       
-      priceData.push({
-        price: parseFloat(price.toFixed(2)),
-        source: sources[i] || page.pageTitle || "Unknown Source",
-        url: page.url || "#"
-      });
-    }
-    
-    // Fill with mock data if we don't have enough real data
-    while (priceData.length < 3) {
-      const priceVariation = (Math.random() * 0.4) - 0.2;
-      const price = basePrice * (1 + priceVariation);
+      const topObject = visionData.responses[0].localizedObjectAnnotations[0];
+      itemName = topObject.name;
+      confidence = topObject.score;
+    } 
+    // Fall back to labels if no objects detected
+    else if (visionData.responses && 
+             visionData.responses[0] && 
+             visionData.responses[0].labelAnnotations && 
+             visionData.responses[0].labelAnnotations.length > 0) {
       
-      priceData.push({
-        price: parseFloat(price.toFixed(2)),
-        source: sources[priceData.length] || "Similar Items",
-        url: "#"
-      });
+      const topLabel = visionData.responses[0].labelAnnotations[0];
+      itemName = topLabel.description;
+      confidence = topLabel.score;
     }
 
-    // Create analysis result
+    // Generate mock prices data for demonstration
+    // In a real-world scenario, this would be replaced with actual price lookups
+    const mockMarketplaces = ["eBay", "Etsy", "Amazon", "Facebook Marketplace"];
+    const priceData = Array.from({ length: 3 }, (_, i) => ({
+      price: Math.floor(Math.random() * 500) + 50, // Random price between $50 and $550
+      source: mockMarketplaces[Math.floor(Math.random() * mockMarketplaces.length)],
+      url: `https://example.com/item/${i}`,
+    }));
+
+    // Get public URL for the image
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from('item-images')
+      .getPublicUrl(imagePath);
+
+    // Prepare analysis result
     const analysisResult = {
-      image: supabase.storage.from('item-images').getPublicUrl(imagePath).data.publicUrl,
+      image: publicUrl,
       itemName: itemName,
       confidence: confidence,
       prices: priceData,
@@ -152,7 +142,8 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error in analyze-image function:", error);
+    
     return new Response(
       JSON.stringify({ error: 'An unexpected error occurred', details: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

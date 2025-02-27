@@ -13,29 +13,45 @@ const Index = () => {
 
   const handleImageUpload = async (file: File) => {
     setIsProcessing(true);
+    setResults(null);
+    
     try {
       // Generate unique file name
       const fileExt = file.name.split('.').pop();
       const fileName = `${uuidv4()}.${fileExt}`;
       const filePath = `uploads/${fileName}`;
 
+      toast({
+        title: "Upload Started",
+        description: "Uploading your image...",
+      });
+
       // Upload image to Supabase Storage
-      const { error: uploadError, data } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('item-images')
         .upload(filePath, file);
 
       if (uploadError) {
-        throw uploadError;
+        throw new Error(`Upload error: ${uploadError.message}`);
       }
 
+      toast({
+        title: "Upload Complete",
+        description: "Analyzing your item...",
+      });
+
       // Call our Edge Function to analyze the image
+      console.log("Calling analyze-image function with path:", filePath);
       const { data: analysisResult, error: functionError } = await supabase.functions
         .invoke('analyze-image', {
           body: { imagePath: filePath },
         });
 
+      console.log("Function response:", analysisResult);
+      
       if (functionError) {
-        throw new Error(functionError.message || 'Failed to analyze image');
+        console.error("Function error:", functionError);
+        throw new Error(`Analysis error: ${functionError.message || 'Failed to analyze image'}`);
       }
 
       if (!analysisResult) {
@@ -56,7 +72,13 @@ const Index = () => {
         ]);
 
       if (dbError) {
-        throw dbError;
+        console.error("Database error:", dbError);
+        // Continue even if DB storage fails, as we can still show results
+        toast({
+          title: "Warning",
+          description: "Results displayed but not saved to database",
+          variant: "destructive",
+        });
       }
 
       setResults(analysisResult);
@@ -69,9 +91,10 @@ const Index = () => {
       console.error('Error processing image:', error);
       toast({
         title: "Error",
-        description: "Failed to process the image. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to process the image. Please try again.",
         variant: "destructive",
       });
+      setResults(null);
     } finally {
       setIsProcessing(false);
     }
