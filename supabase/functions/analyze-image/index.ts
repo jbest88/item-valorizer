@@ -1,9 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
+// Helper to convert an ArrayBuffer to a Base64-encoded string
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -18,19 +30,22 @@ serve(async (req) => {
     if (!imagePath) {
       return new Response(
         JSON.stringify({ error: "Image path is required" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
       );
     }
 
     console.log("Processing image:", imagePath);
 
-    // Create a Supabase admin client using your service role key
+    // Create a Supabase admin client using the service role key
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Retrieve the public URL for the image from Supabase Storage
+    // Get the public URL for the image from Supabase Storage
     const { data: { publicUrl } } = supabaseAdmin.storage
       .from("item-images")
       .getPublicUrl(imagePath);
@@ -38,27 +53,34 @@ serve(async (req) => {
     if (!publicUrl) {
       return new Response(
         JSON.stringify({ error: "Unable to retrieve public URL for the image" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
       );
     }
 
-    // Fetch the image data from the public URL
+    // Fetch the image data using the public URL
     const imageResponse = await fetch(publicUrl);
     if (!imageResponse.ok) {
       return new Response(
         JSON.stringify({ error: "Unable to fetch image data" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
       );
     }
     const arrayBuffer = await imageResponse.arrayBuffer();
-    // Convert the image data to a binary string and then encode it as Base64
-    const binaryString = String.fromCharCode(...new Uint8Array(arrayBuffer));
-    const base64Image = btoa(binaryString);
+    const base64Image = arrayBufferToBase64(arrayBuffer);
 
-    // Retrieve your Google Vision API key from Edge Function secrets
+    // Retrieve the Google Vision API key from secrets
     const googleApiKey = Deno.env.get("GOOGLE_VISION_API_KEY");
     if (!googleApiKey) {
-      return new Response(JSON.stringify({ error: "Missing Google API key" }), { status: 500 });
+      return new Response(
+        JSON.stringify({ error: "Missing Google API key" }),
+        { status: 500 }
+      );
     }
     const visionApiUrl = `https://vision.googleapis.com/v1/images:annotate?key=${googleApiKey}`;
 
@@ -83,10 +105,14 @@ serve(async (req) => {
       console.error("Vision API error:", errorText);
       return new Response(
         JSON.stringify({ error: "Vision API error", details: errorText }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        }
       );
     }
     const visionData = await visionResponse.json();
+    console.log("Vision API response:", JSON.stringify(visionData));
 
     // Process the Vision API response to extract the first label
     const labelAnnotations = visionData.responses?.[0]?.labelAnnotations;
@@ -97,7 +123,7 @@ serve(async (req) => {
       detectedConfidence = labelAnnotations[0].score || 0;
     }
 
-    // Define a mock pricing array (replace with real data as needed)
+    // (Optional) Define a pricing array here or replace with your actual logic
     const prices = [
       { price: 299.99, source: "eBay", url: "https://example.com/ebay" },
       { price: 275.0, source: "Etsy", url: "https://example.com/etsy" },
@@ -113,14 +139,17 @@ serve(async (req) => {
     };
 
     console.log("Analysis complete. Returning Vision API data.");
-    return new Response(
-      JSON.stringify(analysisResult),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-    );
+    return new Response(JSON.stringify(analysisResult), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
   } catch (error) {
     console.error("Error in analyze-image function:", error);
     return new Response(
-      JSON.stringify({ error: "An unexpected error occurred", details: error.message }),
+      JSON.stringify({
+        error: "An unexpected error occurred",
+        details: error.message,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
