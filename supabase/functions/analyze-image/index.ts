@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    // Parse the incoming request JSON
+    // Parse request body
     const { imagePath } = await req.json();
     if (!imagePath) {
       return new Response(
@@ -54,7 +54,7 @@ serve(async (req) => {
     const binaryString = String.fromCharCode(...new Uint8Array(arrayBuffer));
     const base64Image = btoa(binaryString);
 
-    // Retrieve the Google Vision API key from the Edge Function secrets
+    // Retrieve the Google Vision API key from secrets
     const googleApiKey = Deno.env.get("GOOGLE_VISION_API_KEY");
     if (!googleApiKey) {
       return new Response(JSON.stringify({ error: "Missing Google API key" }), { status: 500 });
@@ -89,11 +89,11 @@ serve(async (req) => {
 
     // Process the Vision API response to extract the first label
     const labelAnnotations = visionData.responses?.[0]?.labelAnnotations;
-    let itemName = "Unknown Item";
-    let confidence = 0;
+    let detectedItemName = "Unknown Item";
+    let detectedConfidence = 0;
     if (labelAnnotations && labelAnnotations.length > 0) {
-      itemName = labelAnnotations[0].description || "Unknown Item";
-      confidence = labelAnnotations[0].score || 0;
+      detectedItemName = labelAnnotations[0].description || "Unknown Item";
+      detectedConfidence = labelAnnotations[0].score || 0;
     }
 
     // For demonstration, we'll include a mock pricing array.
@@ -103,15 +103,15 @@ serve(async (req) => {
       { price: 325.0, source: "Facebook Marketplace", url: "https://example.com/facebook" },
     ];
 
-    // Build the final analysis result
+    // Build the final analysis result using actual Vision API data
     const analysisResult = {
       image: publicUrl,
-      itemName,
-      confidence,
+      itemName: detectedItemName,
+      confidence: detectedConfidence,
       prices,
     };
 
-    console.log("Analysis complete. Returning data.");
+    console.log("Analysis complete. Returning Vision API data.");
     return new Response(
       JSON.stringify(analysisResult),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
