@@ -152,4 +152,19 @@ serve(async (req) => {
       prices,
     };
 
-    console.log("Analysi
+    console.log("Analysis complete. Returning Vision API data.");
+    return new Response(JSON.stringify(analysisResult), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+  } catch (error) {
+    console.error("Error in analyze-image function:", error);
+    return new Response(
+      JSON.stringify({
+        error: "An unexpected error occurred",
+        details: error.message,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+    );
+  }
+});
